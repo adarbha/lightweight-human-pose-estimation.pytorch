@@ -136,7 +136,7 @@ def run_demo(net, image_provider, height_size, cpu, track, smooth):
                 cv2.putText(img, 'id: {}'.format(pose.id), (pose.bbox[0], pose.bbox[1] - 16),
                             cv2.FONT_HERSHEY_COMPLEX, 0.5, (0, 0, 255))
 
-        plt.imsave(os.path.join('frames',f'_{index}.png'), img)
+        plt.imsave(os.path.join('frames',f'_{index}.jpg'), img)
         index += 1
         # cv2.imshow('Lightweight Human Pose Estimation Python Demo', img)
         # key = cv2.waitKey(delay)
