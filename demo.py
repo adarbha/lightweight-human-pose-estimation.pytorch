@@ -1,8 +1,9 @@
 import argparse
-
+import os
 import cv2
 import numpy as np
 import torch
+import matplotlib.pyplot as plt
 
 from models.with_mobilenet import PoseEstimationWithMobileNet
 from modules.keypoints import extract_keypoints, group_keypoints
@@ -11,7 +12,7 @@ from modules.pose import Pose, track_poses
 from val import normalize, pad_width
 
 
-class ImageReader(object):
+class ImageReader:
     def __init__(self, file_names):
         self.file_names = file_names
         self.max_idx = len(file_names)
@@ -30,7 +31,7 @@ class ImageReader(object):
         return img
 
 
-class VideoReader(object):
+class VideoReader:
     def __init__(self, file_name):
         self.file_name = file_name
         try:  # OpenCV needs int to read from webcam
@@ -52,7 +53,7 @@ class VideoReader(object):
 
 
 def infer_fast(net, img, net_input_height_size, stride, upsample_ratio, cpu,
-               pad_value=(0, 0, 0), img_mean=np.array([128, 128, 128], np.float32), img_scale=np.float32(1/256)):
+               pad_value=(0, 0, 0), img_mean=np.array([128, 128, 128], np.float32), img_scale=np.float32(1 / 256)):
     height, width, _ = img.shape
     scale = net_input_height_size / height
 
@@ -88,6 +89,11 @@ def run_demo(net, image_provider, height_size, cpu, track, smooth):
     num_keypoints = Pose.num_kpts
     previous_poses = []
     delay = 1
+
+    inferred_img_arr = []
+
+    index = 0
+
     for img in image_provider:
         orig_img = img.copy()
         heatmaps, pafs, scale, pad = infer_fast(net, img, height_size, stride, upsample_ratio, cpu)
@@ -95,7 +101,8 @@ def run_demo(net, image_provider, height_size, cpu, track, smooth):
         total_keypoints_num = 0
         all_keypoints_by_type = []
         for kpt_idx in range(num_keypoints):  # 19th for bg
-            total_keypoints_num += extract_keypoints(heatmaps[:, :, kpt_idx], all_keypoints_by_type, total_keypoints_num)
+            total_keypoints_num += extract_keypoints(heatmaps[:, :, kpt_idx], all_keypoints_by_type,
+                                                     total_keypoints_num)
 
         pose_entries, all_keypoints = group_keypoints(all_keypoints_by_type, pafs)
         for kpt_id in range(all_keypoints.shape[0]):
@@ -119,21 +126,27 @@ def run_demo(net, image_provider, height_size, cpu, track, smooth):
         for pose in current_poses:
             pose.draw(img)
         img = cv2.addWeighted(orig_img, 0.6, img, 0.4, 0)
+
+        inferred_img_arr.append(img)
+
         for pose in current_poses:
             cv2.rectangle(img, (pose.bbox[0], pose.bbox[1]),
                           (pose.bbox[0] + pose.bbox[2], pose.bbox[1] + pose.bbox[3]), (0, 255, 0))
             if track:
                 cv2.putText(img, 'id: {}'.format(pose.id), (pose.bbox[0], pose.bbox[1] - 16),
                             cv2.FONT_HERSHEY_COMPLEX, 0.5, (0, 0, 255))
-        cv2.imshow('Lightweight Human Pose Estimation Python Demo', img)
-        key = cv2.waitKey(delay)
-        if key == 27:  # esc
-            return
-        elif key == 112:  # 'p'
-            if delay == 1:
-                delay = 0
-            else:
-                delay = 1
+
+        plt.imsave(os.path.join('frames',f'_{index}.png'), img)
+        index += 1
+        # cv2.imshow('Lightweight Human Pose Estimation Python Demo', img)
+        # key = cv2.waitKey(delay)
+        # if key == 27:  # esc
+        #     return
+        # elif key == 112:  # 'p'
+        #     if delay == 1:
+        #         delay = 0
+        #     else:
+        #         delay = 1
 
 
 if __name__ == '__main__':
@@ -162,5 +175,9 @@ if __name__ == '__main__':
         frame_provider = VideoReader(args.video)
     else:
         args.track = 0
+
+    frames_dir = 'frames'
+    if not os.path.exists(frames_dir):
+        os.makedirs(frames_dir)
 
     run_demo(net, frame_provider, args.height_size, args.cpu, args.track, args.smooth)
